@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SugarCube Save Editor</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f7fb;
+        color: #222;
+        margin: 0;
+        padding: 0;
+    }
+    .page {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+    h1 {
+        margin-top: 0;
+        font-size: 1.9rem;
+    }
+    .card {
+        background: #ffffff;
+        border: 1px solid #d8dde6;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(32, 49, 70, 0.06);
+        padding: 20px;
+        margin-bottom: 18px;
+    }
+    .card + .card {
+        margin-top: 16px;
+    }
+    label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+    }
+    input[type="file"], input[type="text"], textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font-family: inherit;
+        font-size: 0.95rem;
+    }
+    input[type="text"] {
+        padding: 10px 12px;
+        border: 1px solid #ccd6e3;
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+    textarea {
+        height: 420px;
+        padding: 12px;
+        border: 1px solid #ccd6e3;
+        border-radius: 10px;
+        resize: vertical;
+        line-height: 1.45;
+        font-family: monospace;
+        white-space: pre-wrap;
+    }
+    input[type="file"] {
+        display: none;
+    }
+    label[for="input_file"] {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 18px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        display: inline-block;
+        font-weight: 600;
+        margin-bottom: 16px;
+    }
+    .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+    button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 18px;
+        font-size: 0.95rem;
+        cursor: pointer;
+    }
+    button.secondary {
+        background: #6b7280;
+    }
+    button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+    .search-input,
+    .search-container button {
+        height: 44px;
+        box-sizing: border-box;
+        font-size: 1rem;
+    }
+    .search-input {
+        flex: 1;
+        max-width: 500px;
+        padding: 0 12px;
+        border: 1px solid #ccd6e3;
+        border-radius: 6px;
+    }
+    .search-container button {
+        width: 80px;
+        height: 44px;
+        padding: 0;
+        flex-shrink: 0;
+    }
+    .search-highlight {
+        background-color: #fef3c7;
+        color: #92400e;
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+</style>
+<script src="./js/lz-string.js"></script>
+<script type="text/javascript">
+function $(id) { return document.getElementById(id); }
+
+let searchMatches = [];
+let currentSearchIndex = -1;
+
+function resetEditor() {
+    $('textbox').value = '';
+    $('output_file').value = 'edited.save';
+}
+
+function formatJSON() {
+    const text = $('textbox').value.trim();
+    if (!text) {
+        return;
+    }
+    try {
+        const parsed = JSON.parse(text);
+        $('textbox').value = JSON.stringify(parsed, null, 2);
+    } catch (e) {
+        console.error('Could not parse as JSON:', e.message);
+    }
+}
+
+function minifyJSON() {
+    const text = $('textbox').value.trim();
+    if (!text) {
+        return;
+    }
+    try {
+        const parsed = JSON.parse(text);
+        $('textbox').value = JSON.stringify(parsed);
+    } catch (e) {
+        console.error('Could not parse as JSON:', e.message);
+    }
+}
+
+function switchTab(tabName) {
+    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.querySelector('[data-tab="' + tabName + '"]').classList.add('active');
+    document.getElementById(tabName).classList.add('active');
+}
+
+function renderJSONViewer() {
+    const text = $('textbox').value.trim();
+    const searchTerm = $('searchInput').value.trim().toLowerCase();
+    
+    if (!text) {
+        $('jsonViewer').innerHTML = '<span style="color: #999;">Load a save file to view structured data</span>';
+        return;
+    }
+    try {
+        const parsed = JSON.parse(text);
+        const html = syntaxHighlightJSON(parsed, 0, searchTerm);
+        $('jsonViewer').innerHTML = html;
+    } catch (e) {
+        $('jsonViewer').innerHTML = '<span style="color: #dc2626;">Error parsing JSON: ' + e.message + '</span>';
+    }
+}
+
+function updateSearchMatches(preserveCurrentIndex = false) {
+    const textarea = $('textbox');
+    const searchTerm = $('searchInput').value.trim();
+    const text = textarea.value;
+    const previousMatchStart = preserveCurrentIndex && currentSearchIndex >= 0 && currentSearchIndex < searchMatches.length
+        ? searchMatches[currentSearchIndex]
+        : null;
+
+    searchMatches = [];
+    currentSearchIndex = -1;
+
+    if (!searchTerm) {
+        updateSearchCounter();
+        return;
+    }
+
+    const lowerText = text.toLowerCase();
+    const lowerSearch = searchTerm.toLowerCase();
+    let index = 0;
+    while (index < text.length) {
+        const found = lowerText.indexOf(lowerSearch, index);
+        if (found === -1) break;
+        searchMatches.push(found);
+        index = found + lowerSearch.length;
+    }
+
+    if (searchMatches.length > 0) {
+        if (previousMatchStart !== null) {
+            let closestIndex = 0;
+            let smallestDiff = Math.abs(searchMatches[0] - previousMatchStart);
+            for (let i = 1; i < searchMatches.length; i++) {
+                const diff = Math.abs(searchMatches[i] - previousMatchStart);
+                if (diff < smallestDiff) {
+                    smallestDiff = diff;
+                    closestIndex = i;
+                }
+            }
+            currentSearchIndex = closestIndex;
+        } else {
+            currentSearchIndex = 0;
+        }
+    }
+    updateSearchCounter();
+}
+
+function focusCurrentMatch() {
+    const textarea = $('textbox');
+    if (searchMatches.length === 0) {
+        textarea.setSelectionRange(0, 0);
+        return;
+    }
+    const searchTerm = $('searchInput').value.trim();
+    const start = searchMatches[currentSearchIndex];
+    const end = start + searchTerm.length;
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    const lineHeight = 18;
+    const linesBefore = textarea.value.slice(0, start).split('\n').length;
+    textarea.scrollTop = Math.max(0, (linesBefore - 5) * lineHeight);
+}
+
+function nextSearchMatch() {
+    if (searchMatches.length === 0) return;
+    currentSearchIndex = (currentSearchIndex + 1) % searchMatches.length;
+    focusCurrentMatch();
+    updateSearchCounter();
+}
+
+function prevSearchMatch() {
+    if (searchMatches.length === 0) return;
+    currentSearchIndex = (currentSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+    focusCurrentMatch();
+    updateSearchCounter();
+}
+
+function updateSearchCounter() {
+    const label = $('searchCount');
+    if (!label) return;
+    if (searchMatches.length === 0) {
+        label.textContent = 'No matches';
+    } else {
+        label.textContent = `${currentSearchIndex + 1} / ${searchMatches.length}`;
+    }
+}
+
+function highlightTextarea() {
+    updateSearchMatches();
+}
+
+function syntaxHighlightJSON(json, indent = 0, searchTerm = '') {
+    if (json === null) return highlightText('null', searchTerm, 'json-boolean');
+    if (typeof json === 'boolean') return highlightText(json.toString(), searchTerm, 'json-boolean');
+    if (typeof json === 'number') return highlightText(json.toString(), searchTerm, 'json-number');
+    if (typeof json === 'string') return '<span class="json-string">"' + highlightText(escapeHtml(json), searchTerm) + '"</span>';
+    
+    const padding = '&nbsp;'.repeat(indent);
+    const innerPadding = '&nbsp;'.repeat(indent + 2);
+    
+    if (Array.isArray(json)) {
+        if (json.length === 0) return '[]';
+        const items = json.map(item => innerPadding + syntaxHighlightJSON(item, indent + 2, searchTerm)).join(',\n');
+        return '[\n' + items + '\n' + padding + ']';
+    }
+    
+    if (typeof json === 'object') {
+        const keys = Object.keys(json);
+        if (keys.length === 0) return '{}';
+        const items = keys.map(key => {
+            const highlightedKey = '<span class="json-key">"' + highlightText(escapeHtml(key), searchTerm) + '"</span>';
+            return innerPadding + highlightedKey + ': ' + syntaxHighlightJSON(json[key], indent + 2, searchTerm);
+        }).join(',\n');
+        return '{\n' + items + '\n' + padding + '}';
+    }
+    
+    return highlightText(String(json), searchTerm);
+}
+
+function highlightText(text, searchTerm, className = '') {
+    if (!searchTerm || !text.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return className ? `<span class="${className}">${text}</span>` : text;
+    }
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    const highlighted = text.replace(regex, '<span class="search-highlight">$1</span>');
+    return className ? `<span class="${className}">${highlighted}</span>` : highlighted;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function loadFileAsText() {
+    const fileInput = $('input_file');
+    const file = fileInput.files[0];
+    if (!file) {
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const content = event.target.result;
+        const decompressed = LZString.decompressFromBase64(content);
+        if (decompressed === null) {
+            return;
+        }
+        $('textbox').value = decompressed;
+        formatJSON();
+        const originalName = file.name.replace(/^edited\./, '');
+        $('output_file').value = 'edited.' + originalName;
+    };
+    reader.onerror = function() {
+        console.error('Failed to read the file.');
+    };
+    reader.readAsText(file, 'UTF-8');
+}
+
+function saveTextAsFile() {
+    const text = $('textbox').value;
+    if (!text) {
+        return;
+    }
+
+    const compressed = LZString.compressToBase64(text);
+    const blob = new Blob([compressed], { type: 'text/plain' });
+    const fileName = $('output_file').value.trim() || 'edited.save';
+    const url = window.URL.createObjectURL(blob);
+
+    const downloadLink = document.createElement('a');
+    downloadLink.href = url;
+    downloadLink.download = fileName;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+    window.URL.revokeObjectURL(url);
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+    $('input_file').addEventListener('change', function() {
+        if (this.files[0]) {
+            const originalName = this.files[0].name.replace(/^edited\./, '');
+            $('output_file').value = 'edited.' + originalName;
+            loadFileAsText();
+        }
+    });
+    $('textbox').addEventListener('input', function() {
+        updateSearchMatches(true);
+    });
+    $('searchInput').addEventListener('input', function() {
+        updateSearchMatches();
+    });
+
+});
+</script>
+</head>
+<body>
+<div class="page">
+    <div class="card">
+        <h1>SugarCube Save Editor</h1>
+        <label for="input_file">Select a save file</label>
+        <input type="file" id="input_file" accept="*/*" />
+
+        <div class="button-row">
+            <button type="button" class="secondary" onclick="resetEditor()">Clear editor</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <label for="textbox">Edit decompressed save data</label>
+
+        <div class="search-container">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search in data..." />
+            <button type="button" class="secondary" onclick="prevSearchMatch()">Previous</button>
+            <button type="button" onclick="$('searchInput').value=''; updateSearchMatches();">Clear</button>
+            <button type="button" class="secondary" onclick="nextSearchMatch()">Next</button>
+            <span id="searchCount" style="font-size:1.0rem;color:#374151;">No matches</span>
+        </div>
+
+        <textarea id="textbox" placeholder="The save file contents will appear here after loading."></textarea>
+
+        <div class="button-row" style="margin-top: 12px;">
+            <button type="button" onclick="formatJSON()">Pretty file</button>
+            <button type="button" class="secondary" onclick="minifyJSON()">RAW file</button>
+            <button type="button" onclick="saveTextAsFile()">Save the edited file</button>
+        </div>
+
+        <label for="output_file" style="margin-top: 16px;">Save filename</label>
+        <input type="text" id="output_file" value="edited.save" />
+
+    </div>
+</div>
+</body>
+</html>
