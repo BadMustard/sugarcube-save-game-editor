@@ -83,9 +83,7 @@ var LZString = {
           result.push(f(c));
         });
         return LZString.decompress(result.join(''));
-
     }
-
   },
 
   //compress into a string that is already URI encoded
@@ -120,7 +118,6 @@ var LZString = {
         context_data_val=0,
         context_data_position=0,
         ii;
-
     for (ii = 0; ii < uncompressed.length; ii += 1) {
       context_c = uncompressed.charAt(ii);
       if (!Object.prototype.hasOwnProperty.call(context_dictionary,context_c)) {
@@ -482,7 +479,6 @@ var LZString = {
         enlargeIn = Math.pow(2, numBits);
         numBits++;
       }
-
     }
   }
 };
