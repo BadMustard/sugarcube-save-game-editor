@@ -169,7 +169,6 @@ function switchTab(tabName) {
 function renderJSONViewer() {
     const text = $('textbox').value.trim();
     const searchTerm = $('searchInput').value.trim().toLowerCase();
-    
     if (!text) {
         $('jsonViewer').innerHTML = '<span style="color: #999;">Load a save file to view structured data</span>';
         return;
@@ -190,15 +189,12 @@ function updateSearchMatches(preserveCurrentIndex = false) {
     const previousMatchStart = preserveCurrentIndex && currentSearchIndex >= 0 && currentSearchIndex < searchMatches.length
         ? searchMatches[currentSearchIndex]
         : null;
-
     searchMatches = [];
     currentSearchIndex = -1;
-
     if (!searchTerm) {
         updateSearchCounter();
         return;
     }
-
     const lowerText = text.toLowerCase();
     const lowerSearch = searchTerm.toLowerCase();
     let index = 0;
@@ -208,7 +204,6 @@ function updateSearchMatches(preserveCurrentIndex = false) {
         searchMatches.push(found);
         index = found + lowerSearch.length;
     }
-
     if (searchMatches.length > 0) {
         if (previousMatchStart !== null) {
             let closestIndex = 0;
@@ -277,16 +272,13 @@ function syntaxHighlightJSON(json, indent = 0, searchTerm = '') {
     if (typeof json === 'boolean') return highlightText(json.toString(), searchTerm, 'json-boolean');
     if (typeof json === 'number') return highlightText(json.toString(), searchTerm, 'json-number');
     if (typeof json === 'string') return '<span class="json-string">"' + highlightText(escapeHtml(json), searchTerm) + '"</span>';
-    
     const padding = '&nbsp;'.repeat(indent);
     const innerPadding = '&nbsp;'.repeat(indent + 2);
-    
     if (Array.isArray(json)) {
         if (json.length === 0) return '[]';
         const items = json.map(item => innerPadding + syntaxHighlightJSON(item, indent + 2, searchTerm)).join(',\n');
         return '[\n' + items + '\n' + padding + ']';
     }
-    
     if (typeof json === 'object') {
         const keys = Object.keys(json);
         if (keys.length === 0) return '{}';
@@ -296,7 +288,6 @@ function syntaxHighlightJSON(json, indent = 0, searchTerm = '') {
         }).join(',\n');
         return '{\n' + items + '\n' + padding + '}';
     }
-    
     return highlightText(String(json), searchTerm);
 }
 
@@ -304,7 +295,6 @@ function highlightText(text, searchTerm, className = '') {
     if (!searchTerm || !text.toLowerCase().includes(searchTerm.toLowerCase())) {
         return className ? `<span class="${className}">${text}</span>` : text;
     }
-    
     const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     const highlighted = text.replace(regex, '<span class="search-highlight">$1</span>');
     return className ? `<span class="${className}">${highlighted}</span>` : highlighted;
@@ -322,7 +312,6 @@ function loadFileAsText() {
     if (!file) {
         return;
     }
-
     const reader = new FileReader();
     reader.onload = function(event) {
         const content = event.target.result;
